@@ -32,7 +32,7 @@ describe('Tax-Bracket Calculator page tests', () => {
     onTheHomePage()
     // when
     setGrossIncome(GROSS_INCOME)
-    cy.get('#total-taxes').should('contain', '$20,773.84')
+    cy.get('#total-taxes').should('contain', '$29,523.84')
   })
 
   it('should calculate the effective tax rate', () => {
@@ -41,7 +41,7 @@ describe('Tax-Bracket Calculator page tests', () => {
     // when
     setGrossIncome(GROSS_INCOME)
     // then
-    cy.get('#effective-tax-rate').should('contain', '20.77%')
+    cy.get('#effective-tax-rate').should('contain', '29.52%')
   })
 })
 
@@ -84,3 +84,4 @@ describe('Federal Taxes checks', () => {
     cy.get('#federal-tax-rate').should('contain', '14.61%')
   })
 })
+
