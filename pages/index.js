@@ -2,10 +2,13 @@ import Head from 'next/head'
 import { useEffect, useMemo, useState } from 'react'
 import { useTheme as useNextTheme } from 'next-themes'
 import {
+  Button,
   Col,
+  Collapse,
   Container,
   Grid,
   Input,
+  Progress,
   Row,
   Spacer,
   Switch,
@@ -139,8 +142,94 @@ const federalTaxes = [
   {rate: 0.35, low: 207351, high: 518400, description: '$47,367.50 plus 35% of the amount over $207,350'},
   {rate: 0.37, low: 518401, high: Infinity, description: '$156,235 plus 37% of the amount over $518,400'},
 ]
-const TaxBracketTable = ({ grossIncome, brackets, handleUpdate, theme }) => {
-  let remainingIncome = grossIncome
+
+const PayPeriodButtons = ({ setPayPeriods }) => {
+  return (
+    <Button.Group size="xl" color="gradient" bordered>
+      <Button onPress={(e) => setPayPeriods(12)} value={12}>12</Button>
+      <Button onPress={(e) => setPayPeriods(24)} value={24}>24</Button>
+      <Button onPress={(e) => setPayPeriods(26)} value={26}>26</Button>
+    </Button.Group>
+  )
+}
+
+const PayPeriodTable = ({ 
+    theme,
+    grossIncome, payPeriods,
+    contrib401k, contribDental, contribHealth, contribVision,
+  }) => {
+  const incomePerPayPeriod = parseFloat(grossIncome) / payPeriods
+  let total401k = 0
+  let totalDental = 0
+  let totalHealth = 0
+  let totalVision = 0
+  let totalNetWages = 0
+  const totalDeductions = contrib401k +
+    contribDental +
+    contribHealth +
+    contribVision
+  for (let i=0; i<payPeriods; i++) { 
+    total401k += contrib401k
+    totalDental += contribDental
+    totalHealth += contribHealth
+    totalVision += contribVision
+    totalNetWages += incomePerPayPeriod - totalDeductions
+  }
+
+  return (
+    <Table
+      compact
+      bordered
+      lined
+      hoverable
+      xs={2}
+      containerCss={{'@md': {width: '400px'}}}
+      aria-label="Pay-period table"
+    >
+      <Table.Header>
+        <Table.Column width={6} align='end'>Description &nbsp;</Table.Column>
+        <Table.Column width={6}>Amount</Table.Column>
+      </Table.Header>
+      <Table.Body>
+        <Table.Row>
+          <Table.Cell><Text align='right'>Gross Income per Pay Period</Text></Table.Cell>
+          <Table.Cell><Text id='gross-income-per-pay-period'>{usdFormatter.format(incomePerPayPeriod)}</Text></Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text align='right'>Total Deductions per Pay Period</Text></Table.Cell>
+          <Table.Cell>
+            <Text id='total-deductions-per-pay-period' style={{color: totalDeductions > 0 ? theme.colors.success.value : null}}>
+              {usdFormatter.format(totalDeductions)}
+            </Text>
+          </Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text size="0.9rem" align='right'>401k</Text></Table.Cell>
+          <Table.Cell><Text id='total-401k-contrib' size="0.9rem" >{usdFormatter.format(contrib401k)}</Text></Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text size="0.9rem" align='right'>Dental</Text></Table.Cell>
+          <Table.Cell><Text id='total-dental-contrib' size="0.9rem">{usdFormatter.format(contribDental)}</Text></Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text size="0.9rem" align='right'>Health</Text></Table.Cell>
+          <Table.Cell><Text id='total-health-contrib' size="0.9rem">{usdFormatter.format(contribHealth)}</Text></Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text size="0.9rem" align='right'>Vision</Text></Table.Cell>
+          <Table.Cell><Text id='total-vision-contrib' size="0.9rem">{usdFormatter.format(contribVision)}</Text></Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell><Text align='right'>Net Income per Pay Period</Text></Table.Cell>
+          <Table.Cell><Text id='net-income-per-pay-period' >{usdFormatter.format(incomePerPayPeriod - totalDeductions)}</Text></Table.Cell>
+        </Table.Row>
+      </Table.Body>
+    </Table>
+  )
+}
+
+const TaxBracketTable = ({ taxableIncome, brackets, handleUpdate, theme }) => {
+  let remainingIncome = taxableIncome
   let remainingIncomes = []
   let taxes = 0
 
@@ -212,18 +301,41 @@ const TaxBracketTable = ({ grossIncome, brackets, handleUpdate, theme }) => {
 export default function Home() {
   const { setTheme } = useNextTheme();
   const { theme, isDark, type } = useTheme();
-  const [ income, setIncome ] = useState(0);
+  const [ socialSecurityTax, setSocialSecurityTax ] = useState();
+  const [ medicareTax, setMedicareTax ] = useState();
+  const [ disabilityTax, setDisabilityTax ] = useState();
+  const [ income, setIncome ] = useState(0.0);
   const [ stateTaxes, setStateTaxes ] = useState();
   const [ fedTaxes, setFedTaxes ] = useState();
+  const [ totalTaxes, setTotalTaxes ] = useState(0.0);
+  const [ taxableIncome, setTaxableIncome ] = useState(0.0);
+
+  const [ payPeriods, setPayPeriods ] = useState(26);
+  const [ contrib401k, setContrib401k ] = useState(0.0)
+  const [ contribDental, setContribDental ] = useState(0.0)
+  const [ contribHealth, setContribHealth ] = useState(0.0)
+  const [ contribVision, setContribVision ] = useState(0.0)
   const { value, reset, bindings } = useInput("")
 
+  const socialSecurityTaxRate = 0.062
+  const medicareTaxRate = 0.0145
+  const disabilityTaxRate = 0.011
+  
   const validateIncome = (value) => {
     return value.match(/^[0-9]/)
   }
 
   useEffect(() => {
-    console.log(income)
-  }, [income])
+    setSocialSecurityTax(income * socialSecurityTaxRate)
+    setMedicareTax(income * medicareTaxRate)
+    setDisabilityTax(income * disabilityTaxRate)
+    const contributions = (
+      (contrib401k * payPeriods) + (contribDental * payPeriods) + (contribHealth * payPeriods) + (contribVision * payPeriods))
+    const newTaxableIncome = income > 0 ? income - contributions : 0
+    setTaxableIncome(newTaxableIncome)
+    setTotalTaxes(stateTaxes + fedTaxes + socialSecurityTax + medicareTax + disabilityTax)
+    console.table({ income, taxableIncome, socialSecurityTax, medicareTax, disabilityTax })
+  }, [income, taxableIncome, payPeriods, stateTaxes, fedTaxes,  contrib401k, contribDental, contribHealth, contribVision])
 
   return (
     <div>
@@ -237,10 +349,13 @@ export default function Home() {
 
       <Container md>
         <Spacer y={6} />
+
         <Text h1 align="center" css={{textGradient: "45deg, $blue600 -20%, $pink600 50%"}}>Tax-Bracket Calculator</Text>
         <Spacer />
+
         <Text h3 align="center">Because fuck calculating this shit...</Text>
         <Spacer />
+
         <Container align="center">
           <Switch
             checked={isDark}
@@ -249,11 +364,12 @@ export default function Home() {
             onChange={(e) => setTheme(e.target.checked ? 'dark' : 'light')}
           />
         </Container>
-
         <Spacer y={4} />
+
         <br />
         <Text align='center'>Enter your gross income below to see (roughly) how much you'll owe uncle Sam:</Text>
         <Spacer />
+
         <Container align='center'>
         <Input 
           underlined
@@ -264,13 +380,14 @@ export default function Home() {
           placeholder="50,000" 
           type="text"
           id="gross-income"
-          dataId="gross-income"
+          dataid="gross-income"
           // status="primary"
           pattern="^\d{1,3}(,\d{3})*(\.\d+)?$"
           css={{'-webkit-appearance': 'none'}}
-          onChange={(e) => setIncome(parseFloat(e.target.value))} />
+          onChange={(e) => setIncome(parseFloat(e.target.value || 0))} />
         </Container>
         <Spacer />
+
         <Text align='center' h2>Total Taxes:</Text>
         <Text 
           id='total-taxes'
@@ -278,7 +395,7 @@ export default function Home() {
           size={36} style={{color: theme.colors.error.value}}
         >
           {
-            usdFormatter.format(stateTaxes + fedTaxes)
+            usdFormatter.format(totalTaxes || 0)
           } &nbsp; {
             income > 0 ? '😱' : null
           }
@@ -292,30 +409,128 @@ export default function Home() {
         >
           {
             income > 0 ? 
-              formatPercent((stateTaxes+fedTaxes) / income) : 
+              formatPercent(totalTaxes / income) : 
               formatPercent(0)
           }
         </Text>
+        <Container css={{'@md': {width: '60%'}}}>
+          <Progress value={income > 0 ? (totalTaxes/income)*100 : 0} shadow color="warning" status="warning" />
+        </Container>
         <Spacer />
-        <Text id='state-taxes' h2>California State Taxes: <span style={{color: theme.colors.warning.value}}>{usdFormatter.format(stateTaxes)}</span></Text>
-        <Text id='state-tax-rate' h3>Percent: <Text span style={{color: theme.colors.warning.value}}>{income > 0 ? formatPercent(stateTaxes / income) : formatPercent(0)}</Text></Text>
+
+        {/* <Container align='center'> */}
+        <Collapse.Group>
+          <Collapse id='deductions' align='center' title="Got Any Deductions?" subtitle="Expand to add retirement and insurance contributions to reduce your taxable income.">
+            <Container align='center'>
+            <Text align='center' h3>Taxable Income:</Text>
+            <Text 
+              id='taxable-income'
+              align='center'
+              size={36} style={{color: taxableIncome < income ? theme.colors.success.value : theme.colors.warning.value}}
+            > 
+              { usdFormatter.format(taxableIncome > 0 ? taxableIncome : 0) }
+            </Text>
+            <Container css={{'@md': {width: '60%'}}}>
+              <Text>Your <em>Taxable Income</em> is your gross income minus any deductions you have. Contributions to retirement plans and insurance payments can be deducted from your gross income to reduce how much of your income is "taxable."</Text>
+            </Container>
+            <Spacer />
+
+            { /* 401k Contribution */ }
+            <Input 
+              underlined
+              id='401k-contrib' 
+              label="401k contribution"
+              labelLeft="$"
+              pattern="^\d{1,3}(,\d{3})*(\.\d+)?$"
+              placeholder="0.00"
+              status={contrib401k > 0 ? "success" : "default"}
+              onChange={(e) => setContrib401k(parseFloat(e.target.value || 0))} />
+            <Spacer />
+
+            { /* Dental Contribution */ }
+            <Input 
+              underlined
+              id='dental-contrib' 
+              label="Dental insurance contribution"
+              labelLeft="$"
+              pattern="^\d{1,3}(,\d{3})*(\.\d+)?$"
+              placeholder="0.00"
+              status={contribDental > 0 ? "success" : "default"}
+              onChange={(e) => setContribDental(parseFloat(e.target.value || 0))} />
+            <Spacer />
+
+            { /* Health Contribution */ }
+            <Input 
+              underlined
+              id='health-contrib' 
+              label="Health insurance contribution"
+              labelLeft="$"
+              pattern="^\d{1,3}(,\d{3})*(\.\d+)?$"
+              placeholder="0.00"
+              status={contribHealth > 0 ? "success" : "default"}
+              onChange={(e) => setContribHealth(parseFloat(e.target.value || 0))} />
+            <Spacer />
+
+            { /* Vision Contribution */ }
+            <Input 
+              underlined
+              id='vision-contrib' 
+              label="Vision insurance contribution"
+              labelLeft="$"
+              pattern="^\d{1,3}(,\d{3})*(\.\d+)?$"
+              placeholder="0.00"
+              status={contribVision > 0 ? "success" : "default"}
+              onChange={(e) => setContribVision(parseFloat(e.target.value || 0))} />
+            <Spacer />
+
+            <Text h3>Pay Periods per Year</Text>
+            <PayPeriodButtons setPayPeriods={setPayPeriods} />
+            </Container>
+            <Spacer />
+
+            <PayPeriodTable
+              theme={theme}
+              grossIncome={income}
+              payPeriods={payPeriods}
+              contrib401k={contrib401k}
+              contribDental={contribDental}
+              contribHealth={contribHealth}
+              contribVision={contribVision} />
+          </Collapse>
+        </Collapse.Group>
+        {/* </Container> */}
         <Spacer />
+
+        <Text id='state-taxes' h2>
+          California State Tax Brackets: <span style={{color: theme.colors.warning.value}}>{usdFormatter.format(stateTaxes)}</span>
+        </Text>
+        <Text id='state-tax-rate' h3>
+          Percent: <Text span style={{color: theme.colors.warning.value}}>{income > 0 ? formatPercent(stateTaxes / income) : formatPercent(0)}</Text>
+        </Text>
+        <Spacer />
+
         <TaxBracketTable
-          grossIncome={income}
+          taxableIncome={taxableIncome}
           brackets={caTaxes}
           handleUpdate={setStateTaxes}
           theme={theme} />
         <Spacer />
 
-        <Text id='federal-taxes' h2>Federal Taxes: <span style={{color: theme.colors.warning.value}}>{usdFormatter.format(fedTaxes)}</span></Text>
-        <Text id='federal-tax-rate' h3>Percent: <Text span style={{color: theme.colors.warning.value}}>{income > 0 ? formatPercent(fedTaxes / income) : formatPercent(0)}</Text></Text>
+        <Text id='federal-taxes' h2>
+          Federal Tax Brackets: <span style={{color: theme.colors.warning.value}}>{usdFormatter.format(fedTaxes)}</span>
+        </Text>
+        <Text id='federal-tax-rate' h3>
+          Percent: <Text span style={{color: theme.colors.warning.value}}>{income > 0 ? formatPercent(fedTaxes / income) : formatPercent(0)}</Text>
+        </Text>
         <Spacer />
+
         <TaxBracketTable
-          grossIncome={income}
+          taxableIncome={taxableIncome}
           brackets={federalTaxes}
           handleUpdate={setFedTaxes}
           theme={theme} />
         <Spacer />
+
       </Container>
 
       <footer>
